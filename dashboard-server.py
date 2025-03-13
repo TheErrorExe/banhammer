@@ -1,117 +1,80 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_bootstrap import Bootstrap
-from pymongo import MongoClient
 import sqlite3
 import os
+import glob
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 Bootstrap(app)
 
+DATABASE_TYPE = "sqlite"
+DATABASE_PATTERN = "server_*.db"
 
-DATABASE_TYPE = "sqlite"  # Change to "mongodb" if using MongoDB
-DATABASE_NAME = "modbot.db"
-MONGO_URI = "mongodb://localhost:27017"
+def get_database_files():
+    return glob.glob(DATABASE_PATTERN)
 
-
-if DATABASE_TYPE == "sqlite":
-    conn = sqlite3.connect(DATABASE_NAME, check_same_thread=False)
+def get_db_connection(db_name):
+    conn = sqlite3.connect(db_name, check_same_thread=False)
     conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-elif DATABASE_TYPE == "mongodb":
-    mongo_client = MongoClient(MONGO_URI)
-    db = mongo_client["modbot"]
-    cases_collection = db["cases"]
-    warnings_collection = db["warnings"]
-
-
-def initialize_db():
-    if DATABASE_TYPE == "sqlite":
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cases (
-                case_id TEXT PRIMARY KEY,
-                type TEXT,
-                user_id INTEGER,
-                moderator_id INTEGER,
-                reason TEXT,
-                status TEXT,
-                timestamp TEXT,
-                expires_at TEXT,
-                guild_id INTEGER
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS warnings (
-                user_id INTEGER,
-                reason TEXT,
-                guild_id INTEGER
-            )
-        ''')
-        conn.commit()
-    elif DATABASE_TYPE == "mongodb":
-        if "cases" not in db.list_collection_names():
-            db.create_collection("cases")
-        if "warnings" not in db.list_collection_names():
-            db.create_collection("warnings")
-
-
-initialize_db()
-
+    return conn
 
 def load_cases():
-    if DATABASE_TYPE == "sqlite":
+    cases = []
+    for db_file in get_database_files():
+        conn = get_db_connection(db_file)
+        cursor = conn.cursor()
         cursor.execute("SELECT * FROM cases")
-        cases = cursor.fetchall()
-    elif DATABASE_TYPE == "mongodb":
-        cases = list(cases_collection.find())
+        cases.extend(cursor.fetchall())
+        conn.close()
     return cases
 
-
 def load_warnings():
-    if DATABASE_TYPE == "sqlite":
+    warnings = []
+    for db_file in get_database_files():
+        conn = get_db_connection(db_file)
+        cursor = conn.cursor()
         cursor.execute("SELECT * FROM warnings")
-        warnings = cursor.fetchall()
-    elif DATABASE_TYPE == "mongodb":
-        warnings = list(warnings_collection.find())
+        warnings.extend(cursor.fetchall())
+        conn.close()
     return warnings
 
-
 def delete_case(case_id):
-    if DATABASE_TYPE == "sqlite":
+    for db_file in get_database_files():
+        conn = get_db_connection(db_file)
+        cursor = conn.cursor()
         cursor.execute("DELETE FROM cases WHERE case_id = ?", (case_id,))
         conn.commit()
-    elif DATABASE_TYPE == "mongodb":
-        cases_collection.delete_one({"_id": case_id})
-
+        conn.close()
 
 def update_case_status(case_id, status):
-    if DATABASE_TYPE == "sqlite":
+    for db_file in get_database_files():
+        conn = get_db_connection(db_file)
+        cursor = conn.cursor()
         cursor.execute("UPDATE cases SET status = ? WHERE case_id = ?", (status, case_id))
         conn.commit()
-    elif DATABASE_TYPE == "mongodb":
-        cases_collection.update_one({"_id": case_id}, {"$set": {"status": status}})
-
+        conn.close()
 
 def add_warning(user_id, reason, guild_id):
-    if DATABASE_TYPE == "sqlite":
+    db_name = f"server_{guild_id}.db"
+    if os.path.exists(db_name):
+        conn = get_db_connection(db_name)
+        cursor = conn.cursor()
         cursor.execute("INSERT INTO warnings (user_id, reason, guild_id) VALUES (?, ?, ?)", (user_id, reason, guild_id))
         conn.commit()
-    elif DATABASE_TYPE == "mongodb":
-        warnings_collection.insert_one({"user_id": user_id, "reason": reason, "guild_id": guild_id})
-
+        conn.close()
 
 def remove_warning(user_id, index, guild_id):
-    if DATABASE_TYPE == "sqlite":
+    db_name = f"server_{guild_id}.db"
+    if os.path.exists(db_name):
+        conn = get_db_connection(db_name)
+        cursor = conn.cursor()
         cursor.execute("SELECT reason FROM warnings WHERE user_id = ? AND guild_id = ?", (user_id, guild_id))
         warnings = cursor.fetchall()
         if 0 < index <= len(warnings):
             cursor.execute("DELETE FROM warnings WHERE user_id = ? AND reason = ? AND guild_id = ?", (user_id, warnings[index - 1][0], guild_id))
             conn.commit()
-    elif DATABASE_TYPE == "mongodb":
-        warnings = list(warnings_collection.find({"user_id": user_id, "guild_id": guild_id}))
-        if 0 < index <= len(warnings):
-            warnings_collection.delete_one({"_id": warnings[index - 1]["_id"]})
-
+        conn.close()
 
 @app.route("/")
 def index():
@@ -160,7 +123,8 @@ def add_warning_route():
 
 @app.route("/warnings/delete/<user_id>/<index>", methods=["POST"])
 def delete_warning_route(user_id, index):
-    remove_warning(int(user_id), int(index), 0)  # guild_id is set to 0 for simplicity
+    guild_id = 0
+    remove_warning(int(user_id), int(index), guild_id)
     flash("Warning deleted successfully!", "success")
     return redirect(url_for("warnings"))
 

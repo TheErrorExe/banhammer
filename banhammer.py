@@ -279,7 +279,7 @@ async def warn(ctx, member: discord.Member, *, reason="No reason provided"):
     save_case(case)
     add_warning(member.id, reason, ctx.guild.id)
     await ctx.send(embed=create_embed("⚠️ Warning Issued", f"{member.mention} has been warned.\n**Case ID:** {case_id}\n**Reason:** {reason}"))
-    await notify_user(member, "⚠️ You have been warned", f"**Server:** {ctx.guild.name}\n**Reason:** {reason}"))
+    await notify_user(member, "⚠️ You have been warned", f"**Server:** {ctx.guild.name}\n**Reason:** {reason}")
     await log_action("Warn", ctx.author, member, reason, ctx.guild.id)
 
 @bot.command()

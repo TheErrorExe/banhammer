@@ -216,6 +216,10 @@ async def mute_user(member, duration):
 @bot.event
 async def on_ready():
     print(f"✅ {bot.user} is online!")
+    
+    for guild in bot.guilds:
+        initialize_db(guild.id)
+    
     check_temp_actions.start()
 
 @tasks.loop(minutes=1)

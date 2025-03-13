@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+    <h1 class="animate__animated animate__fadeIn">Cases</h1>
+    <table class="table table-striped animate__animated animate__fadeIn">
+        <thead>
+            <tr>
+                <th>Case ID</th>
+                <th>Type</th>
+                <th>User ID</th>
+                <th>Moderator ID</th>
+                <th>Reason</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for case in cases %}
+                <tr>
+                    <td>{{ case[0] }}</td>
+                    <td>{{ case[1] }}</td>
+                    <td>{{ case[2] }}</td>
+                    <td>{{ case[3] }}</td>
+                    <td>{{ case[4] }}</td>
+                    <td>{{ case[5] }}</td>
+                    <td>
+                        {% if case[5] == "open" %}
+                            <form action="{{ url_for('close_case_route', case_id=case[0]) }}" method="POST" style="display:inline;">
+                                <button type="submit" class="btn btn-warning btn-sm">Close</button>
+                            </form>
+                        {% else %}
+                            <form action="{{ url_for('reopen_case_route', case_id=case[0]) }}" method="POST" style="display:inline;">
+                                <button type="submit" class="btn btn-success btn-sm">Reopen</button>
+                            </form>
+                        {% endif %}
+                        <form action="{{ url_for('delete_case_route', case_id=case[0]) }}" method="POST" style="display:inline;">
+                            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

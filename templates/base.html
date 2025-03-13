@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banhammer Dashboard</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #1e1e2f;
+            color: #ffffff;
+        }
+        .navbar {
+            background-color: #27293d !important;
+        }
+        .list-group-item {
+            background-color: #27293d;
+            border-color: #3a3b5a;
+            color: #ffffff;
+        }
+        .table {
+            color: #ffffff;
+        }
+        .table-striped tbody tr:nth-of-type(odd) {
+            background-color: #2a2b3d;
+        }
+        .btn-primary {
+            background-color: #1d8cf8;
+            border-color: #1d8cf8;
+        }
+        .btn-primary:hover {
+            background-color: #1a73e8;
+            border-color: #1a73e8;
+        }
+        .btn-danger {
+            background-color: #fd5d93;
+            border-color: #fd5d93;
+        }
+        .btn-danger:hover {
+            background-color: #fc2d6a;
+            border-color: #fc2d6a;
+        }
+        .btn-warning {
+            background-color: #ff8d72;
+            border-color: #ff8d72;
+        }
+        .btn-warning:hover {
+            background-color: #ff6b4a;
+            border-color: #ff6b4a;
+        }
+        .btn-success {
+            background-color: #00bf9a;
+            border-color: #00bf9a;
+        }
+        .btn-success:hover {
+            background-color: #009e7e;
+            border-color: #009e7e;
+        }
+        .alert {
+            background-color: #2a2b3d;
+            border-color: #3a3b5a;
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <a class="navbar-brand" href="/">Banhammer Dashboard</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/cases">Cases</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/warnings">Warnings</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/settings">Settings</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <div class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} animate__animated animate__fadeIn">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

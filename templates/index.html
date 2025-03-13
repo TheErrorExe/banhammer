@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+    <h1 class="animate__animated animate__fadeIn">Dashboard</h1>
+    <div class="row">
+        <div class="col-md-6">
+            <h2 class="animate__animated animate__fadeInLeft">Recent Cases</h2>
+            <ul class="list-group animate__animated animate__fadeInLeft">
+                {% for case in cases[:5] %}
+                    <li class="list-group-item">
+                        <strong>Case ID:</strong> {{ case[0] }}<br>
+                        <strong>Type:</strong> {{ case[1] }}<br>
+                        <strong>Status:</strong> {{ case[5] }}
+                    </li>
+                {% endfor %}
+            </ul>
+            <a href="/cases" class="btn btn-primary mt-3 animate__animated animate__fadeInLeft">View All Cases</a>
+        </div>
+        <div class="col-md-6">
+            <h2 class="animate__animated animate__fadeInRight">Recent Warnings</h2>
+            <ul class="list-group animate__animated animate__fadeInRight">
+                {% for warning in warnings[:5] %}
+                    <li class="list-group-item">
+                        <strong>User ID:</strong> {{ warning[0] }}<br>
+                        <strong>Reason:</strong> {{ warning[1] }}
+                    </li>
+                {% endfor %}
+            </ul>
+            <a href="/warnings" class="btn btn-primary mt-3 animate__animated animate__fadeInRight">View All Warnings</a>
+        </div>
+    </div>
+{% endblock %}

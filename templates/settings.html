@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+    <h1 class="animate__animated animate__fadeIn">Settings</h1>
+    <form method="POST" class="animate__animated animate__fadeIn">
+        <div class="form-group">
+            <label for="prefix">Command Prefix (not working)</label>
+            <input type="text" class="form-control" id="prefix" name="prefix" placeholder="Enter new prefix">
+        </div>
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+{% endblock %}

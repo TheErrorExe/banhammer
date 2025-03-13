@@ -3,3 +3,4 @@ __pycache__
 .vscode
 .idea
 modbot.db
+server*.db

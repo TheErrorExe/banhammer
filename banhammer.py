@@ -1,3 +1,5 @@
+print("Banhammer Discord Bot, Copyright (C) 2025 TheErrorExe. This program comes with ABSOLUTELY NO WARRANTY. This is free software, and you are welcome to redistribute it under certain conditions. This Bot is licensed under the GPLv3 (GNU General Public License). You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.")
+
 import discord
 from discord.ext import commands, tasks
 import yaml

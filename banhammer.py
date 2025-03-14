@@ -25,6 +25,7 @@ from collections import defaultdict
 import random
 import string
 import os
+import asyncio
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=".", intents=intents, name="banhammer")

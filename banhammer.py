@@ -522,12 +522,13 @@ async def warns(ctx, member: discord.Member = None):
     else:
         await ctx.send(embed=create_embed("📋 No Warnings", f"{member.mention} has no warnings."))
 
-@bot.command()
+@bot.command(name="userinfo", aliases=["ui"])
 async def userinfo(ctx, member: discord.Member = None):
     member = member or ctx.author
     data = load_data(ctx.guild.id)
     warnings = data["warnings"].get(str(member.id), [])
     roles = [role.mention for role in member.roles if role.name != "@everyone"]
+    
     embed = create_embed(
         f"Userinfo: {member.name}",
         f"**ID:** {member.id}\n"
@@ -536,9 +537,14 @@ async def userinfo(ctx, member: discord.Member = None):
         f"**Warnings:** {len(warnings)}\n"
         f"**Roles:** {', '.join(roles) if roles else 'No roles'}"
     )
-    embed.set_thumbnail(url=member.avatar.url)
+    
+    if member.avatar:
+        embed.set_thumbnail(url=member.avatar.url)
+    else:
+        embed.set_thumbnail(url=member.default_avatar.url)
+    
     await ctx.send(embed=embed)
-
+    
 @bot.command()
 @commands.has_permissions(manage_guild=True)
 async def automod(ctx, action: str, *, word: str = None):
@@ -578,6 +584,64 @@ async def commands(ctx):
     commands_list = [cmd.name for cmd in bot.commands]
     await ctx.send(embed=create_embed("📜 Available Commands", f"`{', '.join(commands_list)}`"))
 
+@bot.command()
+@commands.has_permissions(manage_guild=True)
+async def cases(ctx, member: discord.Member = None):
+    data = load_data(ctx.guild.id)
+    cases = data["cases"]
+
+    if not cases:
+        await ctx.send(embed=create_embed("📜 Cases", "No cases found.", discord.Color.blue()))
+        return
+
+    if member:
+        user_cases = {case_id: case_data for case_id, case_data in cases.items() if case_data["user_id"] == member.id}
+        if not user_cases:
+            await ctx.send(embed=create_embed("📜 Cases", f"No cases found for {member.mention}.", discord.Color.blue()))
+            return
+        cases = user_cases
+
+    cases_list = []
+    for case_id, case_data in cases.items():
+        case_type = case_data["type"]
+        user_id = case_data["user_id"]
+        moderator_id = case_data["moderator_id"]
+        reason = case_data["reason"]
+        status = case_data["status"]
+        timestamp = case_data["timestamp"]
+
+        cases_list.append(
+            f"**Case ID:** {case_id}\n"
+            f"**Type:** {case_type}\n"
+            f"**User:** <@{user_id}>\n"
+            f"**Moderator:** <@{moderator_id}>\n"
+            f"**Reason:** {reason}\n"
+            f"**Status:** {status}\n"
+            f"**Timestamp:** {timestamp}\n"
+            "────────────"
+        )
+
+    pages = []
+    current_page = ""
+    for case in cases_list:
+        if len(current_page) + len(case) > 2000:
+            pages.append(current_page)
+            current_page = case
+        else:
+            current_page += "\n" + case
+
+    if current_page:
+        pages.append(current_page)
+
+    for i, page in enumerate(pages):
+        embed_title = f"📜 Cases for {member.display_name}" if member else "📜 Cases"
+        embed = create_embed(
+            f"{embed_title} (Page {i + 1}/{len(pages)})",
+            page,
+            discord.Color.blue()
+        )
+        await ctx.send(embed=embed)
+        
 @bot.event
 async def on_ready():
     print(f"✅ {bot.user} is online!")

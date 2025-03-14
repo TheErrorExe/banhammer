@@ -502,7 +502,7 @@ async def on_message(message):
             break
 
     await bot.process_commands(message)
-
+"""
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
@@ -537,6 +537,6 @@ async def on_command_error(ctx, error):
         ))
         print(f"Unexpected error in command '{ctx.command}': {error}")
         raise error
-
+"""
 load_config()
 bot.run(config["token"])

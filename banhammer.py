@@ -76,36 +76,39 @@ def get_db_connection(guild_id=None):
         return db
 
 def initialize_db(guild_id=None):
-    conn = get_db_connection(guild_id)
-    if config["database_type"] == "sqlite":
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cases (
-                case_id TEXT PRIMARY KEY,
-                type TEXT,
-                user_id INTEGER,
-                moderator_id INTEGER,
-                reason TEXT,
-                status TEXT,
-                timestamp TEXT,
-                expires_at TEXT,
-                guild_id INTEGER
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS warnings (
-                user_id INTEGER,
-                reason TEXT,
-                guild_id INTEGER
-            )
-        ''')
-        conn.commit()
-    elif config["database_type"] == "mongodb":
-        db = conn
-        if "cases" not in db.list_collection_names():
-            db.create_collection("cases")
-        if "warnings" not in db.list_collection_names():
-            db.create_collection("warnings")
+    try:
+        conn = get_db_connection(guild_id)
+        if config["database_type"] == "sqlite":
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS cases (
+                    case_id TEXT PRIMARY KEY,
+                    type TEXT,
+                    user_id INTEGER,
+                    moderator_id INTEGER,
+                    reason TEXT,
+                    status TEXT,
+                    timestamp TEXT,
+                    expires_at TEXT,
+                    guild_id INTEGER
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS warnings (
+                    user_id INTEGER,
+                    reason TEXT,
+                    guild_id INTEGER
+                )
+            ''')
+            conn.commit()
+        elif config["database_type"] == "mongodb":
+            db = conn
+            if "cases" not in db.list_collection_names():
+                db.create_collection("cases")
+            if "warnings" not in db.list_collection_names():
+                db.create_collection("warnings")
+    except Exception as e:
+        print(f"Error initializing database: {e}")
 
 def generate_case_id():
     return ''.join(random.choices(string.ascii_letters + string.digits, k=10))
@@ -231,14 +234,7 @@ async def mute_user(member, duration):
         await asyncio.sleep(duration)
         await member.remove_roles(muted_role)
 
-@bot.event
-async def on_ready():
-    print(f"✅ {bot.user} is online!")
-    
-    for guild in bot.guilds:
-        initialize_db(guild.id)
-    
-    check_temp_actions.start()
+
 
 @tasks.loop(minutes=1)
 async def check_temp_actions():
@@ -258,23 +254,6 @@ async def check_temp_actions():
                             await member.remove_roles(muted_role)
                 temp_actions.remove(action)
 
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-
-    server_config = load_server_config(message.guild.id)
-    forbidden_words = server_config["automod"].get("forbidden_words", [])
-    content_lower = message.content.lower()
-
-    for word in forbidden_words:
-        if word in content_lower:
-            await message.delete()
-            await message.channel.send(f"{message.author.mention}, your message contained a forbidden word.", delete_after=5)
-            await log_action("Automod Filter", bot.user, message.author, f"Used forbidden word: {word}", message.guild.id)
-            break
-
-    await bot.process_commands(message)
 
 @bot.command()
 @commands.has_permissions(manage_guild=True)
@@ -499,16 +478,64 @@ async def commands(ctx):
     await ctx.send(embed=create_embed("📜 Available Commands", f"`{', '.join(commands_list)}`"))
 
 @bot.event
+async def on_ready():
+    print(f"✅ {bot.user} is online!")
+    for guild in bot.guilds:
+        initialize_db(guild.id)
+    check_temp_actions.start()
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    server_config = load_server_config(message.guild.id)
+    forbidden_words = server_config["automod"].get("forbidden_words", [])
+    content_lower = message.content.lower()
+
+    for word in forbidden_words:
+        if word in content_lower:
+            await message.delete()
+            await message.channel.send(f"{message.author.mention}, your message contained a forbidden word.", delete_after=5)
+            await log_action("Automod Filter", bot.user, message.author, f"Used forbidden word: {word}", message.guild.id)
+            break
+
+    await bot.process_commands(message)
+
+@bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(embed=create_embed("⚠️ Error", f"Missing arguments! Correct usage: `{ctx.command}`.", discord.Color.red()))
+        await ctx.send(embed=create_embed(
+            "⚠️ Error",
+            f"Missing arguments! Correct usage: `{ctx.command} {ctx.command.signature}`.",
+            discord.Color.red()
+        ))
     elif isinstance(error, commands.MissingPermissions):
-        await ctx.send(embed=create_embed("🔨 Error", "You don't have permission to use this command.", discord.Color.red()))
+        await ctx.send(embed=create_embed(
+            "🔨 Error",
+            "You don't have permission to use this command.",
+            discord.Color.red()
+        ))
     elif isinstance(error, commands.CommandNotFound):
-        await ctx.send(embed=create_embed("⚠️ Error", "Unknown command. Use `.commands` for a list.", discord.Color.red()))
+        await ctx.send(embed=create_embed(
+            "⚠️ Error",
+            "Unknown command. Use `.commands` for a list.",
+            discord.Color.red()
+        ))
+    elif isinstance(error, commands.BadArgument):
+        await ctx.send(embed=create_embed(
+            "⚠️ Error",
+            f"Invalid argument! Correct usage: `{ctx.command} {ctx.command.signature}`.",
+            discord.Color.red()
+        ))
     else:
-        await ctx.send(embed=create_embed("❌ Error", "An unexpected error occurred.", discord.Color.red()))
-        raise error  
+        await ctx.send(embed=create_embed(
+            "❌ Error",
+            "An unexpected error occurred.",
+            discord.Color.red()
+        ))
+        print(f"Unexpected error in command '{ctx.command}': {error}")
+        raise error
 
 load_config()
 bot.run(config["token"])

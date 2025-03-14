@@ -32,6 +32,8 @@ bot = commands.Bot(command_prefix=".", intents=intents, name="banhammer")
 
 config = {}
 server_configs = {}
+user_message_counts = defaultdict(lambda: defaultdict(int))
+user_last_message_time = defaultdict(lambda: defaultdict(datetime.now))
 
 def load_config():
     global config
@@ -45,10 +47,12 @@ def load_config():
             "database_name": "modbot.db",
             "mongo_uri": "mongodb://localhost:27017",
             "default_prefix": ".",
-            "automod": {"forbidden_words": []}
+            "automod": {"forbidden_words": [], "anti_spam": {"enabled": True, "message_limit": 5, "time_window": 10}},
+            "allowed_servers": []
         }
         with open("botconfig.yml", "w") as f:
             yaml.dump(config, f)
+
 def get_servers_db_connection():
     conn = sqlite3.connect("servers.db")
     conn.row_factory = sqlite3.Row
@@ -100,7 +104,7 @@ def save_server_config(guild_id):
             server_configs[guild_id]["modlog_channel"]
         ))
         conn.commit()
-        
+
 def save_config():
     with open("botconfig.yml", "w") as f:
         yaml.dump(config, f)
@@ -276,8 +280,6 @@ async def mute_user(member, duration):
         await asyncio.sleep(duration)
         await member.remove_roles(muted_role)
 
-
-
 @tasks.loop(minutes=1)
 async def check_temp_actions():
     temp_actions = load_temp_actions()
@@ -295,7 +297,7 @@ async def check_temp_actions():
                         if muted_role and muted_role in member.roles:
                             await member.remove_roles(muted_role)
             remove_temp_action(action["action_id"])
-            
+
 def get_actions_db_connection():
     conn = sqlite3.connect("actions.db")
     conn.row_factory = sqlite3.Row
@@ -353,7 +355,6 @@ def remove_temp_action(action_id):
     cursor = conn.cursor()
     cursor.execute("DELETE FROM temp_actions WHERE action_id = ?", (action_id,))
     conn.commit()
-
 
 @bot.command()
 @commands.has_permissions(manage_guild=True)
@@ -419,7 +420,7 @@ async def timeban(ctx, member: discord.Member, duration: int, *, reason="No reas
     await member.ban(reason=reason)
     await ctx.send(embed=create_embed("🔨 User Temp-Banned", f"{member.mention} has been banned for **{duration} minutes**.\n**Action ID:** {action_id}\n**Reason:** {reason}"))
     await log_action("Temp-Ban", ctx.author, member, reason, ctx.guild.id)
-    
+
 @bot.command()
 @commands.has_permissions(manage_guild=True)
 async def kick(ctx, member: discord.Member, *, reason="No reason provided"):
@@ -480,7 +481,7 @@ async def timemute(ctx, member: discord.Member, duration: int, *, reason="No rea
         f"**Reason:** {reason}"
     ))
     await log_action("Temp-Mute", ctx.author, member, reason, ctx.guild.id)
-    
+
 @bot.command()
 @commands.has_permissions(manage_guild=True)
 async def caseclose(ctx, case_id: str):
@@ -544,7 +545,7 @@ async def userinfo(ctx, member: discord.Member = None):
         embed.set_thumbnail(url=member.default_avatar.url)
     
     await ctx.send(embed=embed)
-    
+
 @bot.command()
 @commands.has_permissions(manage_guild=True)
 async def automod(ctx, action: str, *, word: str = None):
@@ -642,9 +643,6 @@ async def commands(ctx):
     commands_list = [cmd.name for cmd in bot.commands]
     await ctx.send(embed=create_embed("📜 Available Commands", f"`{', '.join(commands_list)}`"))
 
-
-
-        
 @bot.event
 async def on_ready():
     print(f"✅ {bot.user} is online!")
@@ -670,42 +668,31 @@ async def on_message(message):
             await log_action("Automod Filter", bot.user, message.author, f"Used forbidden word: {word}", message.guild.id)
             break
 
+    if server_config["automod"].get("anti_spam", {}).get("enabled", False):
+        user_id = message.author.id
+        guild_id = message.guild.id
+        current_time = datetime.now()
+        time_window = server_config["automod"]["anti_spam"].get("time_window", 10)
+        message_limit = server_config["automod"]["anti_spam"].get("message_limit", 5)
+
+        if current_time - user_last_message_time[guild_id][user_id] > timedelta(seconds=time_window):
+            user_message_counts[guild_id][user_id] = 0
+            user_last_message_time[guild_id][user_id] = current_time
+
+        user_message_counts[guild_id][user_id] += 1
+
+        if user_message_counts[guild_id][user_id] > message_limit:
+            await message.delete()
+            await message.channel.send(f"{message.author.mention}, please do not spam.", delete_after=5)
+            await log_action("Anti-Spam", bot.user, message.author, "Exceeded message limit", message.guild.id)
+            await mute_user(message.author, 60)
+
     await bot.process_commands(message)
-"""
+
 @bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(embed=create_embed(
-            "⚠️ Error",
-            f"Missing arguments! Correct usage: `{ctx.command} {ctx.command.signature}`.",
-            discord.Color.red()
-        ))
-    elif isinstance(error, commands.MissingPermissions):
-        await ctx.send(embed=create_embed(
-            "🔨 Error",
-            "You don't have permission to use this command.",
-            discord.Color.red()
-        ))
-    elif isinstance(error, commands.CommandNotFound):
-        await ctx.send(embed=create_embed(
-            "⚠️ Error",
-            "Unknown command. Use `.commands` for a list.",
-            discord.Color.red()
-        ))
-    elif isinstance(error, commands.BadArgument):
-        await ctx.send(embed=create_embed(
-            "⚠️ Error",
-            f"Invalid argument! Correct usage: `{ctx.command} {ctx.command.signature}`.",
-            discord.Color.red()
-        ))
-    else:
-        await ctx.send(embed=create_embed(
-            "❌ Error",
-            "An unexpected error occurred.",
-            discord.Color.red()
-        ))
-        print(f"Unexpected error in command '{ctx.command}': {error}")
-        raise error
-"""
+async def on_guild_join(guild):
+    if config["allowed_servers"] and str(guild.id) not in config["allowed_servers"]:
+        await guild.leave()
+
 load_config()
 bot.run(config["token"])

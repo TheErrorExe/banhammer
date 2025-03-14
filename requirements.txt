@@ -1,0 +1,4 @@
+discord.py
+pyyaml
+flask
+flask-bootstrap

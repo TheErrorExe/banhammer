@@ -580,12 +580,6 @@ async def automod(ctx, action: str, *, word: str = None):
             await ctx.send(embed=create_embed("📋 Automod List", "\n".join(automod_words)))
 
 @bot.command()
-async def commands(ctx):
-    commands_list = [cmd.name for cmd in bot.commands]
-    await ctx.send(embed=create_embed("📜 Available Commands", f"`{', '.join(commands_list)}`"))
-
-
-@bot.command()
 @commands.has_permissions(manage_guild=True)
 async def cases(ctx, member: discord.Member = None):
     data = load_data(ctx.guild.id)
@@ -642,6 +636,14 @@ async def cases(ctx, member: discord.Member = None):
             discord.Color.blue()
         )
         await ctx.send(embed=embed)
+
+@bot.command()
+async def commands(ctx):
+    commands_list = [cmd.name for cmd in bot.commands]
+    await ctx.send(embed=create_embed("📜 Available Commands", f"`{', '.join(commands_list)}`"))
+
+
+
         
 @bot.event
 async def on_ready():

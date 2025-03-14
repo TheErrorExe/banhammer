@@ -49,20 +49,61 @@ def load_config():
         }
         with open("botconfig.yml", "w") as f:
             yaml.dump(config, f)
+def get_servers_db_connection():
+    conn = sqlite3.connect("servers.db")
+    conn.row_factory = sqlite3.Row
+    return conn
 
-def save_config():
-    with open("botconfig.yml", "w") as f:
-        yaml.dump(config, f)
+def initialize_servers_db():
+    conn = get_servers_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS server_configs (
+            guild_id TEXT PRIMARY KEY,
+            prefix TEXT,
+            automod TEXT,
+            modlog_channel TEXT
+        )
+    ''')
+    conn.commit()
 
 def load_server_config(guild_id):
-    if guild_id not in server_configs:
-        server_configs[guild_id] = {"prefix": config["default_prefix"], "automod": config["automod"].copy()}
+    conn = get_servers_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM server_configs WHERE guild_id = ?", (guild_id,))
+    row = cursor.fetchone()
+    if row:
+        server_configs[guild_id] = {
+            "prefix": row["prefix"],
+            "automod": yaml.safe_load(row["automod"]),
+            "modlog_channel": row["modlog_channel"]
+        }
+    else:
+        server_configs[guild_id] = {
+            "prefix": config["default_prefix"],
+            "automod": config["automod"].copy(),
+            "modlog_channel": None
+        }
     return server_configs[guild_id]
 
 def save_server_config(guild_id):
     if guild_id in server_configs:
-        config["automod"] = server_configs[guild_id]["automod"]
-        save_config()
+        conn = get_servers_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT OR REPLACE INTO server_configs (guild_id, prefix, automod, modlog_channel)
+            VALUES (?, ?, ?, ?)
+        ''', (
+            guild_id,
+            server_configs[guild_id]["prefix"],
+            yaml.dump(server_configs[guild_id]["automod"]),
+            server_configs[guild_id]["modlog_channel"]
+        ))
+        conn.commit()
+        
+def save_config():
+    with open("botconfig.yml", "w") as f:
+        yaml.dump(config, f)
 
 def get_db_connection(guild_id=None):
     if config["database_type"] == "sqlite":
@@ -239,21 +280,79 @@ async def mute_user(member, duration):
 
 @tasks.loop(minutes=1)
 async def check_temp_actions():
-    for guild in bot.guilds:
-        data = load_data(guild.id)
-        temp_actions = data.get("temp_actions", [])
-        for action in temp_actions[:]:
-            if datetime.now().timestamp() >= action["expires_at"]:
-                if action["type"] == "ban":
-                    user = await bot.fetch_user(action["user_id"])
+    temp_actions = load_temp_actions()
+    for action in temp_actions[:]:
+        if datetime.now() >= action["expires_at"]:
+            guild = bot.get_guild(int(action["guild_id"]))
+            if guild:
+                if action["action_type"] == "tempban":
+                    user = await bot.fetch_user(int(action["user_id"]))
                     await guild.unban(user)
-                elif action["type"] == "mute":
-                    member = guild.get_member(action["user_id"])
+                elif action["action_type"] == "tempmute":
+                    member = guild.get_member(int(action["user_id"]))
                     if member:
                         muted_role = discord.utils.get(guild.roles, name="Muted")
                         if muted_role and muted_role in member.roles:
                             await member.remove_roles(muted_role)
-                temp_actions.remove(action)
+            remove_temp_action(action["action_id"])
+            
+def get_actions_db_connection():
+    conn = sqlite3.connect("actions.db")
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def initialize_actions_db():
+    conn = get_actions_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS temp_actions (
+            action_id TEXT PRIMARY KEY,
+            guild_id TEXT,
+            user_id TEXT,
+            action_type TEXT,
+            expires_at TEXT,
+            reason TEXT
+        )
+    ''')
+    conn.commit()
+
+def load_temp_actions():
+    conn = get_actions_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM temp_actions")
+    temp_actions = []
+    for row in cursor.fetchall():
+        temp_actions.append({
+            "action_id": row["action_id"],
+            "guild_id": row["guild_id"],
+            "user_id": row["user_id"],
+            "action_type": row["action_type"],
+            "expires_at": datetime.fromisoformat(row["expires_at"]),
+            "reason": row["reason"]
+        })
+    return temp_actions
+
+def save_temp_action(action):
+    conn = get_actions_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR REPLACE INTO temp_actions (action_id, guild_id, user_id, action_type, expires_at, reason)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (
+        action["action_id"],
+        action["guild_id"],
+        action["user_id"],
+        action["action_type"],
+        action["expires_at"].isoformat(),
+        action.get("reason", "")
+    ))
+    conn.commit()
+
+def remove_temp_action(action_id):
+    conn = get_actions_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM temp_actions WHERE action_id = ?", (action_id,))
+    conn.commit()
 
 
 @bot.command()
@@ -306,23 +405,21 @@ async def ban(ctx, member: discord.Member, *, reason="No reason provided"):
 @bot.command()
 @commands.has_permissions(manage_guild=True)
 async def timeban(ctx, member: discord.Member, duration: int, *, reason="No reason provided"):
-    case_id = generate_case_id()
-    case = {
-        "case_id": case_id,
-        "type": "tempban",
-        "user_id": member.id,
-        "moderator_id": ctx.author.id,
-        "reason": reason,
-        "status": "open",
-        "timestamp": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
-        "expires_at": (datetime.now() + timedelta(minutes=duration)).strftime("%d.%m.%Y %H:%M:%S"),
-        "guild_id": ctx.guild.id
+    action_id = generate_case_id()
+    expires_at = datetime.now() + timedelta(minutes=duration)
+    action = {
+        "action_id": action_id,
+        "guild_id": str(ctx.guild.id),
+        "user_id": str(member.id),
+        "action_type": "tempban",
+        "expires_at": expires_at,
+        "reason": reason
     }
-    save_case(case)
+    save_temp_action(action)
     await member.ban(reason=reason)
-    await ctx.send(embed=create_embed("🔨 User Temp-Banned", f"{member.mention} has been banned for **{duration} minutes**.\n**Case ID:** {case_id}\n**Reason:** {reason}"))
+    await ctx.send(embed=create_embed("🔨 User Temp-Banned", f"{member.mention} has been banned for **{duration} minutes**.\n**Action ID:** {action_id}\n**Reason:** {reason}"))
     await log_action("Temp-Ban", ctx.author, member, reason, ctx.guild.id)
-
+    
 @bot.command()
 @commands.has_permissions(manage_guild=True)
 async def kick(ctx, member: discord.Member, *, reason="No reason provided"):
@@ -364,23 +461,26 @@ async def mute(ctx, member: discord.Member, *, reason="No reason provided"):
 @bot.command()
 @commands.has_permissions(manage_guild=True)
 async def timemute(ctx, member: discord.Member, duration: int, *, reason="No reason provided"):
-    case_id = generate_case_id()
-    case = {
-        "case_id": case_id,
-        "type": "tempmute",
-        "user_id": member.id,
-        "moderator_id": ctx.author.id,
-        "reason": reason,
-        "status": "open",
-        "timestamp": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
-        "expires_at": (datetime.now() + timedelta(minutes=duration)).strftime("%d.%m.%Y %H:%M:%S"),
-        "guild_id": ctx.guild.id
+    action_id = generate_case_id()
+    expires_at = datetime.now() + timedelta(minutes=duration)
+    action = {
+        "action_id": action_id,
+        "guild_id": str(ctx.guild.id),
+        "user_id": str(member.id),
+        "action_type": "tempmute",
+        "expires_at": expires_at,
+        "reason": reason
     }
-    save_case(case)
+    save_temp_action(action)
     await mute_user(member, duration * 60)
-    await ctx.send(embed=create_embed("🔇 User Temp-Muted", f"{member.mention} has been muted for **{duration} minutes**.\n**Case ID:** {case_id}\n**Reason:** {reason}"))
+    await ctx.send(embed=create_embed(
+        "🔇 User Temp-Muted",
+        f"{member.mention} has been muted for **{duration} minutes**.\n"
+        f"**Action ID:** {action_id}\n"
+        f"**Reason:** {reason}"
+    ))
     await log_action("Temp-Mute", ctx.author, member, reason, ctx.guild.id)
-
+    
 @bot.command()
 @commands.has_permissions(manage_guild=True)
 async def caseclose(ctx, case_id: str):
@@ -481,8 +581,10 @@ async def commands(ctx):
 @bot.event
 async def on_ready():
     print(f"✅ {bot.user} is online!")
+    initialize_servers_db()
+    initialize_actions_db()
     for guild in bot.guilds:
-        initialize_db(guild.id)
+        load_server_config(guild.id)
     check_temp_actions.start()
 
 @bot.event

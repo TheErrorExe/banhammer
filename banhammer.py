@@ -584,8 +584,9 @@ async def commands(ctx):
     commands_list = [cmd.name for cmd in bot.commands]
     await ctx.send(embed=create_embed("📜 Available Commands", f"`{', '.join(commands_list)}`"))
 
-@commands.has_permissions(manage_guild=True)
+
 @bot.command()
+@commands.has_permissions(manage_guild=True)
 async def cases(ctx, member: discord.Member = None):
     data = load_data(ctx.guild.id)
     cases = data["cases"]

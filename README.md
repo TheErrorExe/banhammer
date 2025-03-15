@@ -1,5 +1,5 @@
 # Banhammer
-An Free and Open Source Discord Moderation Bot to host yourself
+A Free and Open Source Discord Moderation Bot for selfhosting\
 **Warning:** Banhammer is work in progress.
 
 # Features
@@ -25,7 +25,7 @@ It will crash to create a botconfig.yml\
 Replace YOUR_TOKEN_HERE with your token from the Discord Developer Portal\
 You can also change more in botconfig.yml if you want\
 Now start ```python3 banhammer.py``` again\
-Your Bot is now ready\
+Your Bot is now ready
 ### Dashboard Setup
 Tutorial to setup the Dashboard
 Start ```python3 dashboard-server.py```

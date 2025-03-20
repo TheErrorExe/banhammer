@@ -1,6 +1,14 @@
+# RIP Banhammer March 2025 - March 2025
+The Banhammer Discord Bot is now discontinued. Do not ask for support.
+This Repo will remain online as an Archive.
+
+Support: theerrorexe@gmail.com
+DMCA/Copyright issues: dmca@errexe.xyz
+
+
 # Banhammer
-A Free and Open Source Discord Moderation Bot for selfhosting\
-**Warning:** Banhammer is work in progress.
+Banhammer WAS a Free and Open Source Discord Moderation Bot for selfhosting\
+**Warning:** Banhammer WAS work in progress.
 
 # Features
 - Warnings

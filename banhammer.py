@@ -1,4 +1,7 @@
+print(f"Banhammer was a Free and Open-Source Moderation Bot for Discord. It is now discontinued 😢. DO NOT ask for Support. This discontinued Software comes with ABSOLUTELY NO WARRANTY\n\n")
+
 print("Banhammer Discord Bot, Copyright (C) 2025 TheErrorExe. This program comes with ABSOLUTELY NO WARRANTY. This is free software, and you are welcome to redistribute it under certain conditions. This Bot is licensed under the GPLv3 (GNU General Public License). You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.")
+
 
 """
 Copyright (C) 2025 TheErrorExe

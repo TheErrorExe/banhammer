@@ -123,39 +123,64 @@ def get_db_connection(guild_id=None):
 
 def initialize_db(guild_id=None):
     try:
-        conn = get_db_connection(guild_id)
-        if config["database_type"] == "sqlite":
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS cases (
-                    case_id TEXT PRIMARY KEY,
-                    type TEXT,
-                    user_id INTEGER,
-                    moderator_id INTEGER,
-                    reason TEXT,
-                    status TEXT,
-                    timestamp TEXT,
-                    expires_at TEXT,
-                    guild_id INTEGER
-                )
-            ''')
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS warnings (
-                    user_id INTEGER,
-                    reason TEXT,
-                    guild_id INTEGER
-                )
-            ''')
-            conn.commit()
-        elif config["database_type"] == "mongodb":
-            db = conn
-            if "cases" not in db.list_collection_names():
-                db.create_collection("cases")
-            if "warnings" not in db.list_collection_names():
-                db.create_collection("warnings")
-    except Exception as e:
-        print(f"Error initializing database: {e}")
 
+        conn = get_db_connection(guild_id)
+        cursor = conn.cursor()
+
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cases (
+                case_id TEXT PRIMARY KEY,
+                type TEXT,
+                user_id INTEGER,
+                moderator_id INTEGER,
+                reason TEXT,
+                status TEXT,
+                timestamp TEXT,
+                expires_at TEXT,
+                guild_id INTEGER
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS warnings (
+                user_id INTEGER,
+                reason TEXT,
+                guild_id INTEGER
+            )
+        ''')
+
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS temp_actions (
+                action_id TEXT PRIMARY KEY,
+                guild_id TEXT,
+                user_id TEXT,
+                action_type TEXT,
+                expires_at TEXT,
+                reason TEXT
+            )
+        ''')
+
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS server_configs (
+                guild_id TEXT PRIMARY KEY,
+                prefix TEXT,
+                automod TEXT,
+                modlog_channel TEXT
+            )
+        ''')
+
+        conn.commit()
+        print(f"Database initialized for guild {guild_id}.")
+
+    except sqlite3.Error as e:
+        print(f"Error initializing database for guild {guild_id}: {e}")
+    finally:
+        if conn:
+            conn.close()
+            
 def generate_case_id():
     return ''.join(random.choices(string.ascii_letters + string.digits, k=10))
 
@@ -650,6 +675,7 @@ async def on_ready():
     initialize_actions_db()
     for guild in bot.guilds:
         load_server_config(guild.id)
+        initialize_db(guild.id)
     check_temp_actions.start()
 
 @bot.event
